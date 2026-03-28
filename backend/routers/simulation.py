@@ -46,7 +46,7 @@ def run(request: ActorsConfirmRequest, background_tasks: BackgroundTasks):
 
 def run_full_simulation(simulation_id: str):
     sim = simulations[simulation_id]
-    result = run_simulation(sim["question"], sim["actors"], turns=12)
+    result = run_simulation(sim["question"], sim["actors"], turns=1)
     report = generate_report(result)
     simulations[simulation_id]["status"] = "done"
     simulations[simulation_id]["result"] = result
