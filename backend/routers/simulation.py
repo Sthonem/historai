@@ -57,7 +57,10 @@ def get_status(simulation_id: str):
     sim = simulations.get(simulation_id)
     if not sim:
         return {"error": "Simulation not found"}
-    return {"status": sim["status"]}
+    return {
+        "status": sim["status"],
+        "actors": sim.get("actors", [])
+    }
 
 @router.get("/report/{simulation_id}")
 def get_report(simulation_id: str):
@@ -66,4 +69,22 @@ def get_report(simulation_id: str):
         return {"error": "Simulation not found"}
     if sim["status"] != "done":
         return {"error": "Simulation not ready yet", "status": sim["status"]}
-    return sim["report"]
+    
+    report = sim["report"]
+    result = sim["result"]
+    
+    timeline = []
+    for turn in result["turns"]:
+        turn_data = {
+            "turn": turn["turn"],
+            "event": turn.get("event"),
+            "decisions": {}
+        }
+        for actor_name, decision in turn["decisions"].items():
+            turn_data["decisions"][actor_name] = decision[:150] + "..." if len(decision) > 150 else decision
+        timeline.append(turn_data)
+    
+    return {
+        **report,
+        "timeline": timeline
+    }
