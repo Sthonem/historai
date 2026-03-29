@@ -1,4 +1,53 @@
+import json
 from core.llm import llm_call
+
+def generate_map_data(question: str, narrative: str) -> dict:
+    prompt = f"""
+Based on this alternate history scenario: "{question}"
+
+And this outcome: {narrative[:500]}
+
+Return a JSON object showing territorial control in this alternate timeline.
+Use ONLY modern country names (e.g. "Turkey" not "Ottoman Empire", "Russia" not "Soviet Union").
+Be historically accurate about which territories each power controlled.
+
+For example:
+- British Empire controlled: United Kingdom, India, Australia, Canada, South Africa, Egypt, New Zealand
+- Ottoman Empire controlled: Turkey, Syria, Iraq, Jordan, Lebanon, Israel, Saudi Arabia, Yemen
+- Russian Empire controlled: Russia, Ukraine, Belarus, Kazakhstan, Georgia, Armenia, Azerbaijan
+- German Empire controlled: Germany, Tanzania, Cameroon, Namibia
+- Austro-Hungarian Empire controlled: Austria, Hungary, Czech Republic, Slovakia, Croatia, Bosnia and Herzegovina
+
+Format:
+{{
+  "factions": [
+    {{
+      "name": "faction name",
+      "color": "one of: red, blue, green, yellow, purple, orange",
+      "countries": ["Country1", "Country2", "Country3"]
+    }}
+  ],
+  "year": "approximate year of the scenario"
+}}
+
+Rules:
+- Use modern country names only
+- Include at least 5-8 countries per major faction
+- Maximum 6 factions
+- Return ONLY valid JSON, no explanation, no markdown
+"""
+    response = llm_call(
+        prompt,
+        system="You are a historical cartographer. Return only valid JSON with modern country names."
+    )
+
+    try:
+        return json.loads(response)
+    except json.JSONDecodeError:
+        start = response.find('{')
+        end = response.rfind('}') + 1
+        return json.loads(response[start:end])
+
 
 def generate_report(simulation_result: dict) -> dict:
     question = simulation_result["question"]
@@ -62,8 +111,11 @@ Focus on: how they responded, what they tried to achieve, how they evolved acros
             "summary": summary
         })
 
+    map_data = generate_map_data(question, narrative)
+
     return {
         "question": question,
         "narrative": narrative,
-        "actor_cards": actor_cards
+        "actor_cards": actor_cards,
+        "map_data": map_data
     }
