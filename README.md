@@ -93,6 +93,38 @@ Frontend (`.env.local`):
 - What if Napoleon had won the Battle of Waterloo?
 - What if the Soviet Union had not collapsed in 1991?
 
+## Deploy
+
+The app has two pieces: a Next.js frontend (serves fine on Vercel) and a long-running FastAPI backend (needs a regular server because of SSE streaming and per-process in-memory state).
+
+### Backend → Railway (recommended)
+
+1. Sign in at [railway.app](https://railway.app) and create a new project from this GitHub repo.
+2. In the service settings:
+   - **Root Directory:** `backend`
+   - Railway will detect the `Dockerfile` automatically.
+3. Add environment variables under **Variables**:
+   - `GROQ_API_KEY`
+   - `GEMINI_API_KEY`
+   - `CORS_ALLOWED_ORIGINS` — comma-separated list of your Vercel URLs (e.g. `https://historai.vercel.app,https://historai-git-main-you.vercel.app`)
+   - Optionally `SUPABASE_URL` and `SUPABASE_KEY` (service-role) to persist
+4. Click **Generate Domain** under Settings → Networking. You'll get something like `historai-backend-production.up.railway.app`.
+5. Once live, hit `https://YOUR-DOMAIN/` and confirm it returns `{"status":"Historai API is running"}`.
+
+Other hosts work too — the `Dockerfile` is generic and uses `$PORT`. Render, Fly.io, Google Cloud Run all work the same way.
+
+### Frontend → Vercel
+
+1. Sign in at [vercel.com](https://vercel.com) and import this GitHub repo.
+2. In the project settings:
+   - **Root Directory:** `frontend`
+   - Vercel will detect Next.js automatically.
+3. Add an environment variable:
+   - `NEXT_PUBLIC_API_URL` = your Railway URL from above (no trailing slash)
+4. Deploy. Vercel gives you a URL like `historai.vercel.app`.
+
+After deploying the frontend, go back to Railway and update `CORS_ALLOWED_ORIGINS` to include the actual Vercel URL, then redeploy the backend.
+
 ## Roadmap
 
 - [x] Multi-agent simulation engine
@@ -102,9 +134,9 @@ Frontend (`.env.local`):
 - [x] Territorial map visualization
 - [x] Configurable simulation length
 - [x] Supabase persistence + history page
+- [x] Deploy guide (Vercel + Railway)
 - [ ] Parallel timelines with probability analysis
 - [ ] Auth + simulation limits
-- [ ] Deploy
 
 ## License
 
