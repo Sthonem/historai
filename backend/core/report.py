@@ -1,5 +1,22 @@
 import json
+import logging
+from json import JSONDecodeError
+
 from core.llm import llm_call
+
+logger = logging.getLogger(__name__)
+
+
+def _extract_json_object(text: str) -> dict:
+    try:
+        return json.loads(text)
+    except JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start == -1 or end <= start:
+            raise
+        return json.loads(text[start:end])
+
 
 def generate_map_data(question: str, narrative: str) -> dict:
     prompt = f"""
@@ -38,30 +55,28 @@ Rules:
 """
     response = llm_call(
         prompt,
-        system="You are a historical cartographer. Return only valid JSON with modern country names."
+        system="You are a historical cartographer. Return only valid JSON with modern country names.",
     )
-
     try:
-        return json.loads(response)
-    except json.JSONDecodeError:
-        start = response.find('{')
-        end = response.rfind('}') + 1
-        return json.loads(response[start:end])
+        return _extract_json_object(response)
+    except JSONDecodeError as exc:
+        logger.warning("Map data JSON parse failed: %s", exc)
+        return {"factions": [], "year": None}
 
 
 def generate_report(simulation_result: dict) -> dict:
     question = simulation_result["question"]
     actors = simulation_result["actors"]
     turns = simulation_result["turns"]
-    final_world_state = simulation_result["final_world_state"]
 
-    turns_summary = ""
+    turns_summary_lines: list[str] = []
     for turn in turns:
-        turns_summary += f"\n[Turn {turn['turn']}]"
-        if turn["event"]:
-            turns_summary += f"\nUnexpected event: {turn['event']}"
+        turns_summary_lines.append(f"\n[Turn {turn['turn']}]")
+        if turn.get("event"):
+            turns_summary_lines.append(f"Unexpected event: {turn['event']}")
         for actor_name, decision in turn["decisions"].items():
-            turns_summary += f"\n{actor_name}: {decision[:150]}..."
+            turns_summary_lines.append(f"{actor_name}: {decision[:150]}...")
+    turns_summary = "\n".join(turns_summary_lines)
 
     narrative_prompt = f"""
 You are a historian analyzing an alternate history simulation.
@@ -81,15 +96,16 @@ Write in a confident, engaging historical style.
 
     narrative = llm_call(
         narrative_prompt,
-        system="You are a brilliant historian writing an engaging alternate history analysis."
+        system="You are a brilliant historian writing an engaging alternate history analysis.",
     )
 
-    actor_cards = []
+    actor_cards: list[dict] = []
     for actor in actors:
-        actor_decisions = []
-        for turn in turns:
-            if actor["name"] in turn["decisions"]:
-                actor_decisions.append(turn["decisions"][actor["name"]])
+        actor_decisions = [
+            turn["decisions"][actor["name"]]
+            for turn in turns
+            if actor["name"] in turn["decisions"]
+        ]
 
         card_prompt = f"""
 Summarize {actor['name']}'s role in this alternate history simulation in 2-3 sentences.
@@ -98,18 +114,24 @@ Their decisions were:
 
 Focus on: how they responded, what they tried to achieve, how they evolved across the simulation.
 """
-        summary = llm_call(
-            card_prompt,
-            system="You are a historian writing concise actor summaries."
-        )
+        try:
+            summary = llm_call(
+                card_prompt,
+                system="You are a historian writing concise actor summaries.",
+            )
+        except Exception as exc:
+            logger.warning("Actor card generation failed for %s: %s", actor["name"], exc)
+            summary = "(Summary unavailable.)"
 
-        actor_cards.append({
-            "name": actor["name"],
-            "role": actor["role"],
-            "faction": actor["faction"],
-            "influence": actor["influence"],
-            "summary": summary
-        })
+        actor_cards.append(
+            {
+                "name": actor["name"],
+                "role": actor["role"],
+                "faction": actor["faction"],
+                "influence": actor["influence"],
+                "summary": summary,
+            }
+        )
 
     map_data = generate_map_data(question, narrative)
 
@@ -117,5 +139,5 @@ Focus on: how they responded, what they tried to achieve, how they evolved acros
         "question": question,
         "narrative": narrative,
         "actor_cards": actor_cards,
-        "map_data": map_data
+        "map_data": map_data,
     }

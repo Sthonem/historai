@@ -13,22 +13,23 @@ Historai is a multi-agent AI simulation engine for alternate history. Ask any hi
 
 ## Features
 
-- 🧠 Multi-agent simulation with bilateral interactions and influence scoring
-- ⚡ Random event injection for unexpected historical turns
-- 🗺️ Territorial control map visualization
-- 📜 Turn-by-turn timeline of actor decisions
-- 🔄 Groq + Gemini fallback for reliability
+- Multi-agent simulation with influence-weighted turn order and per-actor memory
+- Random event injection for unexpected historical turns
+- Configurable number of simulation turns (1–20)
+- Territorial control map visualization with modern country names
+- Turn-by-turn timeline of actor decisions
+- Groq (LLaMA 3.3 70B) primary with Gemini fallback for reliability
 
 ## Tech Stack
 
 **Backend**
 - FastAPI
-- Groq (LLaMA 3.3 70B) + Google Gemini fallback
+- Groq + Google Gemini fallback
 - Python 3.11+
 
 **Frontend**
-- Next.js 16
-- Tailwind CSS
+- Next.js 16 (App Router)
+- Tailwind CSS v4
 - React Simple Maps
 
 ## Getting Started
@@ -40,30 +41,46 @@ Historai is a multi-agent AI simulation engine for alternate history. Ask any hi
 - Gemini API key → [aistudio.google.com](https://aistudio.google.com)
 
 ### Backend
+
 ```bash
 cd backend
 uv venv
 source .venv/bin/activate
 uv pip install -e .
-```
-
-Create `.env`:
-```
-GROQ_API_KEY=your_groq_key
-GEMINI_API_KEY=your_gemini_key
-```
-```bash
+cp .env.example .env  # then fill in your keys
 uvicorn main:app --reload
 ```
 
 ### Frontend
+
 ```bash
 cd frontend
+cp .env.example .env.local  # optional; defaults to http://localhost:8000
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+Open [http://localhost:3000](http://localhost:3000).
+
+## Configuration
+
+Backend (`.env`):
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `GROQ_API_KEY` | — | Required. Groq API key. |
+| `GEMINI_API_KEY` | — | Required. Gemini API key for fallback. |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Comma-separated allowed origins. |
+| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Groq model id. |
+| `GEMINI_MODEL` | `gemini-2.0-flash` | Gemini model id. |
+| `LLM_TEMPERATURE` | `0.7` | Sampling temperature. |
+| `LLM_MAX_TOKENS` | `800` | Max tokens per Groq call. |
+
+Frontend (`.env.local`):
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Historai backend URL. |
 
 ## Example Questions
 
@@ -79,6 +96,7 @@ Open [http://localhost:3000](http://localhost:3000)
 - [x] Actor cards
 - [x] Turn-by-turn timeline
 - [x] Territorial map visualization
+- [x] Configurable simulation length
 - [ ] Parallel timelines with probability analysis
 - [ ] Supabase persistence
 - [ ] Auth + simulation limits

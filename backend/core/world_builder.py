@@ -1,5 +1,23 @@
 import json
+import logging
+from json import JSONDecodeError
+
 from core.llm import llm_call
+
+logger = logging.getLogger(__name__)
+
+
+def _extract_json_array(text: str) -> list[dict]:
+    """Best-effort extraction of a JSON array from an LLM response."""
+    try:
+        return json.loads(text)
+    except JSONDecodeError:
+        start = text.find("[")
+        end = text.rfind("]") + 1
+        if start == -1 or end <= start:
+            raise
+        return json.loads(text[start:end])
+
 
 def generate_actors(question: str) -> list[dict]:
     prompt = f"""
@@ -28,13 +46,28 @@ Example format:
   }}
 ]
 """
-    response = llm_call(prompt, system="You are a historical analysis expert. Always respond with valid JSON only.")
-    
-    try:
-        actors = json.loads(response)
-        return actors
-    except json.JSONDecodeError:
-        start = response.find('[')
-        end = response.rfind(']') + 1
-        actors = json.loads(response[start:end])
-        return actors
+    response = llm_call(
+        prompt,
+        system="You are a historical analysis expert. Always respond with valid JSON only.",
+    )
+
+    actors = _extract_json_array(response)
+
+    normalized: list[dict] = []
+    for actor in actors:
+        if not isinstance(actor, dict):
+            continue
+        try:
+            influence = int(actor.get("influence", 5))
+        except (TypeError, ValueError):
+            influence = 5
+        normalized.append(
+            {
+                "name": str(actor.get("name", "Unknown")),
+                "role": str(actor.get("role", "Unknown")),
+                "motivation": str(actor.get("motivation", "")),
+                "influence": max(1, min(10, influence)),
+                "faction": str(actor.get("faction", "Unaligned")),
+            }
+        )
+    return normalized
