@@ -95,9 +95,36 @@ Frontend (`.env.local`):
 
 ## Deploy
 
-The app has two pieces: a Next.js frontend (serves fine on Vercel) and a long-running FastAPI backend (needs a regular server because of SSE streaming and per-process in-memory state).
+You can host both pieces on Vercel as two separate projects (frontend = Next.js, backend = Python serverless), or split frontend on Vercel and backend on Railway (or any host). The Vercel-only path is simpler to manage; the Railway path has no function timeout.
 
-### Backend → Railway (recommended)
+### Option A: Both on Vercel
+
+The backend ships with `api/index.py`, a `vercel.json`, and a `requirements.txt` so Vercel can serve it as a Python serverless function. Because Vercel serverless functions are stateless and time-limited, this mode **requires Supabase** for persistence and is **capped by your Vercel plan's `maxDuration`**:
+
+| Plan | Max function duration | Realistic simulation budget |
+| --- | --- | --- |
+| Hobby (free) | 60 s | 2-3 turns, 3-4 actors |
+| Pro | 300 s (configured) | 6 turns, 6-8 actors |
+
+#### Backend (Vercel project #1)
+
+1. Set up Supabase first (see *Configuration* below) and apply `backend/migrations/001_simulations.sql`.
+2. In Vercel, create a new project from this repo with **Root Directory:** `backend`. Framework Preset: **Other**.
+3. Add env vars (all required for serverless mode):
+   - `GROQ_API_KEY`
+   - `GEMINI_API_KEY`
+   - `SUPABASE_URL`
+   - `SUPABASE_KEY` (service-role)
+   - `CORS_ALLOWED_ORIGINS` — your frontend Vercel URL(s), e.g. `https://historai.vercel.app`
+4. Deploy. You'll get a URL like `historai-api.vercel.app`. Hit `/` and verify it returns `{"status":"Historai API is running"}`.
+
+#### Frontend (Vercel project #2)
+
+1. New Vercel project from the same repo with **Root Directory:** `frontend`. Framework Preset: **Next.js** (auto).
+2. Env var: `NEXT_PUBLIC_API_URL` = your backend Vercel URL from above (no trailing slash).
+3. Deploy.
+
+### Option B: Backend → Railway (no timeout)
 
 1. Sign in at [railway.app](https://railway.app) and create a new project from this GitHub repo.
 2. In the service settings:
@@ -111,19 +138,7 @@ The app has two pieces: a Next.js frontend (serves fine on Vercel) and a long-ru
 4. Click **Generate Domain** under Settings → Networking. You'll get something like `historai-backend-production.up.railway.app`.
 5. Once live, hit `https://YOUR-DOMAIN/` and confirm it returns `{"status":"Historai API is running"}`.
 
-Other hosts work too — the `Dockerfile` is generic and uses `$PORT`. Render, Fly.io, Google Cloud Run all work the same way.
-
-### Frontend → Vercel
-
-1. Sign in at [vercel.com](https://vercel.com) and import this GitHub repo.
-2. In the project settings:
-   - **Root Directory:** `frontend`
-   - Vercel will detect Next.js automatically.
-3. Add an environment variable:
-   - `NEXT_PUBLIC_API_URL` = your Railway URL from above (no trailing slash)
-4. Deploy. Vercel gives you a URL like `historai.vercel.app`.
-
-After deploying the frontend, go back to Railway and update `CORS_ALLOWED_ORIGINS` to include the actual Vercel URL, then redeploy the backend.
+Other hosts work too — the `Dockerfile` is generic and uses `$PORT`. Render, Fly.io, Google Cloud Run all work the same way. Then set up the frontend on Vercel as in Option A, with `NEXT_PUBLIC_API_URL` pointing at the Railway URL.
 
 ## Roadmap
 

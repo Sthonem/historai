@@ -3,7 +3,7 @@ import json
 import logging
 from typing import Any, AsyncIterator
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from core.events import SENTINEL, EventBus
@@ -25,9 +25,19 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/simulate", tags=["simulation"])
 
-# Process-local registry of live event buses per simulation. Survives only as
-# long as the worker that started the simulation, by design.
+# Process-local registry of live event buses per simulation. On serverless
+# (Vercel) these only live for the duration of the SSE response that owns them;
+# on long-running hosts they persist across the whole simulation lifetime.
 _active_buses: dict[str, EventBus] = {}
+_active_locks: dict[str, asyncio.Lock] = {}
+
+
+def _lock_for(simulation_id: str) -> asyncio.Lock:
+    lock = _active_locks.get(simulation_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _active_locks[simulation_id] = lock
+    return lock
 
 
 @router.post("/init", response_model=SimulationInitResponse)
@@ -47,7 +57,9 @@ def init_simulation(request: SimulationRequest) -> SimulationInitResponse:
 
 
 @router.post("/run")
-async def run(request: ActorsConfirmRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
+def run(request: ActorsConfirmRequest) -> dict[str, Any]:
+    """Confirm actors and mark the simulation ready. The actual run is driven
+    by the SSE ``/stream`` endpoint so we work on serverless hosts too."""
     sim = storage.get(request.simulation_id)
     if not sim:
         raise HTTPException(status_code=404, detail="Simulation not found")
@@ -56,40 +68,32 @@ async def run(request: ActorsConfirmRequest, background_tasks: BackgroundTasks) 
     storage.update_actors(request.simulation_id, actors, request.turns)
     storage.set_status(request.simulation_id, "running")
 
-    _active_buses[request.simulation_id] = EventBus(asyncio.get_running_loop())
-
-    background_tasks.add_task(_run_full_simulation, request.simulation_id)
     return {"status": "running", "simulation_id": request.simulation_id}
 
 
-def _run_full_simulation(simulation_id: str) -> None:
+async def _simulate_worker(simulation_id: str) -> None:
     sim = storage.get(simulation_id)
-    if sim is None:
-        logger.warning("Simulation %s missing at run time", simulation_id)
-        return
     bus = _active_buses.get(simulation_id)
-    publish = bus.publish if bus else None
+    if sim is None or bus is None:
+        return
     try:
-        result = run_simulation(
+        result = await asyncio.to_thread(
+            run_simulation,
             sim["question"],
             sim["actors"],
-            turns=sim["turns"],
-            on_event=publish,
+            sim["turns"],
+            bus.publish,
         )
-        if bus:
-            bus.publish({"type": "report_generating"})
-        report = generate_report(result)
+        bus.publish({"type": "report_generating"})
+        report = await asyncio.to_thread(generate_report, result)
         storage.set_result_and_report(simulation_id, result=result, report=report)
-        if bus:
-            bus.publish({"type": "done", "simulation_id": simulation_id})
+        bus.publish({"type": "done", "simulation_id": simulation_id})
     except Exception as exc:
         logger.exception("Simulation %s failed", simulation_id)
         storage.set_status(simulation_id, "error", error=str(exc))
-        if bus:
-            bus.publish({"type": "error", "error": str(exc)})
+        bus.publish({"type": "error", "error": str(exc)})
     finally:
-        if bus:
-            bus.close()
+        bus.close()
 
 
 @router.get("/status/{simulation_id}", response_model=SimulationStatusResponse)
@@ -126,24 +130,39 @@ def list_simulations(limit: int = 50) -> SimulationListResponse:
 
 @router.get("/stream/{simulation_id}")
 async def stream_simulation(simulation_id: str, request: Request) -> StreamingResponse:
-    """Server-Sent Events stream of a running simulation's progress.
+    """Server-Sent Events stream that drives the simulation.
 
-    Replays any prior events first, then live-streams as they happen. Closes
-    on ``done`` / ``error`` or client disconnect.
-
-    Note: the event bus is process-local. If the backend was restarted after
-    the simulation began, this endpoint returns 410 Gone and the client should
-    fall back to ``/status`` + ``/report``.
+    If the simulation hasn't been started yet (no bus in this process), the
+    handler kicks it off inline. This makes it work on serverless hosts where
+    BackgroundTasks die with the response.
     """
     sim = storage.get(simulation_id)
     if not sim:
         raise HTTPException(status_code=404, detail="Simulation not found")
 
-    bus = _active_buses.get(simulation_id)
-    if bus is None:
-        if sim["status"] in ("done", "error"):
-            raise HTTPException(status_code=410, detail="Stream closed; fetch /report instead")
-        raise HTTPException(status_code=425, detail="Simulation not started in this process")
+    if sim["status"] == "error":
+        raise HTTPException(status_code=500, detail=sim.get("error") or "Simulation failed")
+
+    if sim["status"] not in ("running", "done"):
+        raise HTTPException(
+            status_code=425,
+            detail=f"Simulation not ready to stream (status: {sim['status']})",
+        )
+
+    lock = _lock_for(simulation_id)
+    async with lock:
+        bus = _active_buses.get(simulation_id)
+        if bus is None and sim["status"] == "running":
+            bus = EventBus(asyncio.get_running_loop())
+            _active_buses[simulation_id] = bus
+            asyncio.create_task(_simulate_worker(simulation_id))
+        elif bus is None and sim["status"] == "done":
+            raise HTTPException(
+                status_code=410,
+                detail="Stream closed; fetch /report instead",
+            )
+
+    assert bus is not None
 
     async def event_generator() -> AsyncIterator[bytes]:
         replayed_done = False
@@ -152,6 +171,7 @@ async def stream_simulation(simulation_id: str, request: Request) -> StreamingRe
             if event.get("type") in ("done", "error"):
                 replayed_done = True
         if replayed_done or bus.is_closed():
+            _cleanup(simulation_id)
             return
 
         queue = bus.subscribe()
@@ -171,6 +191,8 @@ async def stream_simulation(simulation_id: str, request: Request) -> StreamingRe
                     break
         finally:
             bus.unsubscribe(queue)
+            if bus.is_closed():
+                _cleanup(simulation_id)
 
     return StreamingResponse(
         event_generator(),
@@ -180,6 +202,11 @@ async def stream_simulation(simulation_id: str, request: Request) -> StreamingRe
             "X-Accel-Buffering": "no",
         },
     )
+
+
+def _cleanup(simulation_id: str) -> None:
+    _active_buses.pop(simulation_id, None)
+    _active_locks.pop(simulation_id, None)
 
 
 def _sse_frame(event: dict[str, Any]) -> bytes:
