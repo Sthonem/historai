@@ -52,3 +52,15 @@ export interface SimulationInitPayload {
   simulation_id: string
   actors: Actor[]
 }
+
+export type StreamEvent =
+  | { type: 'simulation_started'; question: string; turns: number; actors: Actor[] }
+  | { type: 'turn_started'; turn: number }
+  | { type: 'event_injected'; turn: number; event: string }
+  | { type: 'actor_thinking'; turn: number; actor: string }
+  | { type: 'actor_decided'; turn: number; actor: string; decision: string }
+  | { type: 'turn_completed'; turn: number; decisions: Record<string, string>; event: string | null }
+  | { type: 'simulation_completed'; turns: number }
+  | { type: 'report_generating' }
+  | { type: 'done'; simulation_id: string }
+  | { type: 'error'; error: string }

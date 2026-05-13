@@ -64,3 +64,7 @@ export function getStatus(simulationId: string): Promise<SimulationStatusPayload
 export function getReport(simulationId: string): Promise<Report> {
   return request<Report>(`/simulate/report/${simulationId}`)
 }
+
+export function streamUrl(simulationId: string): string {
+  return `${API_BASE_URL}/simulate/stream/${simulationId}`
+}

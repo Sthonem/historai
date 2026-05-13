@@ -1,9 +1,12 @@
 import logging
 import random
+from typing import Callable, Optional
 
 from core.llm import llm_call
 
 logger = logging.getLogger(__name__)
+
+EventCallback = Callable[[dict], None]
 
 
 RANDOM_EVENTS_GENERAL = [
@@ -34,6 +37,15 @@ RANDOM_EVENTS_CONCENTRATED = [
 DEFAULT_TURNS = 6
 BASE_EVENT_PROBABILITY = 0.25
 MEMORY_WINDOW = 5
+
+
+def _emit(callback: Optional[EventCallback], event_type: str, **payload) -> None:
+    if callback is None:
+        return
+    try:
+        callback({"type": event_type, **payload})
+    except Exception:
+        logger.exception("Event callback failed for type=%s", event_type)
 
 
 def _influence_label(rank: int, total: int, influence: int) -> str:
@@ -117,7 +129,24 @@ high-influence actors give orders, mid-tier actors maneuver, low-influence actor
     )
 
 
-def run_simulation(question: str, actors: list[dict], turns: int = DEFAULT_TURNS) -> dict:
+def run_simulation(
+    question: str,
+    actors: list[dict],
+    turns: int = DEFAULT_TURNS,
+    on_event: Optional[EventCallback] = None,
+) -> dict:
+    """Run the multi-turn simulation, optionally streaming progress via ``on_event``.
+
+    Emitted event types:
+      - ``simulation_started`` ``{question, turns, actors}``
+      - ``turn_started`` ``{turn}``
+      - ``event_injected`` ``{turn, event}``
+      - ``actor_thinking`` ``{turn, actor}``
+      - ``actor_decided`` ``{turn, actor, decision}``
+      - ``turn_completed`` ``{turn, decisions, event}``
+      - ``simulation_completed`` ``{turns: int}``
+    """
+
     world_state = f"""
 Historical what-if scenario: {question}
 
@@ -132,13 +161,24 @@ Key actors are now responding to this new reality.
     total_actors = len(actors_sorted)
 
     event_probability, event_pool = _event_probability(actors_sorted)
+    pool_label = (
+        "concentrated"
+        if event_pool is RANDOM_EVENTS_CONCENTRATED
+        else "unstable"
+        if event_pool is RANDOM_EVENTS_UNSTABLE
+        else "general"
+    )
     logger.info(
         "Simulation event probability=%.2f pool=%s",
         event_probability,
-        "concentrated" if event_pool is RANDOM_EVENTS_CONCENTRATED else "unstable" if event_pool is RANDOM_EVENTS_UNSTABLE else "general",
+        pool_label,
     )
 
+    _emit(on_event, "simulation_started", question=question, turns=turns, actors=actors_sorted)
+
     for turn_num in range(1, turns + 1):
+        _emit(on_event, "turn_started", turn=turn_num)
+
         turn_data: dict = {
             "turn": turn_num,
             "world_state": world_state,
@@ -150,8 +190,10 @@ Key actors are now responding to this new reality.
             event = random.choice(event_pool)
             world_state += f"\n[Unexpected event: {event}]"
             turn_data["event"] = event
+            _emit(on_event, "event_injected", turn=turn_num, event=event)
 
         for rank, actor in enumerate(actors_sorted):
+            _emit(on_event, "actor_thinking", turn=turn_num, actor=actor["name"])
             try:
                 decision = run_actor_decision(
                     actor,
@@ -165,9 +207,20 @@ Key actors are now responding to this new reality.
                 decision = "(No response — communication lines disrupted.)"
             turn_data["decisions"][actor["name"]] = decision
             memories[actor["name"]].append(f"Turn {turn_num}: {decision}")
+            _emit(on_event, "actor_decided", turn=turn_num, actor=actor["name"], decision=decision)
 
         world_state += "\n\n" + _world_state_summary(turn_num, turn_data["decisions"], actors_sorted)
         all_turns.append(turn_data)
+
+        _emit(
+            on_event,
+            "turn_completed",
+            turn=turn_num,
+            decisions=turn_data["decisions"],
+            event=turn_data["event"],
+        )
+
+    _emit(on_event, "simulation_completed", turns=turns)
 
     return {
         "question": question,
