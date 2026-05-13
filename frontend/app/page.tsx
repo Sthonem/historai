@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 import { initSimulation } from './lib/api'
@@ -44,8 +45,14 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white flex flex-col">
-      <div className="px-6 py-5 border-b border-zinc-900">
+      <div className="px-6 py-5 border-b border-zinc-900 flex items-center justify-between">
         <span className="text-white font-semibold tracking-tight">Historai</span>
+        <Link
+          href="/history"
+          className="text-zinc-500 hover:text-white transition text-xs uppercase tracking-widest"
+        >
+          History
+        </Link>
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-20">

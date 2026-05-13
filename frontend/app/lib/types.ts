@@ -53,6 +53,20 @@ export interface SimulationInitPayload {
   actors: Actor[]
 }
 
+export interface SimulationSummary {
+  id: string
+  question: string
+  status: SimulationStatus
+  turns: number
+  created_at?: string | null
+  updated_at?: string | null
+  error?: string | null
+}
+
+export interface SimulationListPayload {
+  items: SimulationSummary[]
+}
+
 export type StreamEvent =
   | { type: 'simulation_started'; question: string; turns: number; actors: Actor[] }
   | { type: 'turn_started'; turn: number }

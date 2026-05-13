@@ -2,6 +2,7 @@ import type {
   Actor,
   Report,
   SimulationInitPayload,
+  SimulationListPayload,
   SimulationStatusPayload,
 } from './types'
 
@@ -63,6 +64,10 @@ export function getStatus(simulationId: string): Promise<SimulationStatusPayload
 
 export function getReport(simulationId: string): Promise<Report> {
   return request<Report>(`/simulate/report/${simulationId}`)
+}
+
+export function listSimulations(limit = 50): Promise<SimulationListPayload> {
+  return request<SimulationListPayload>(`/simulate/list?limit=${limit}`)
 }
 
 export function streamUrl(simulationId: string): string {

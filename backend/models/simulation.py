@@ -51,3 +51,17 @@ class ReportResponse(BaseModel):
     actor_cards: list[ActorCard]
     map_data: MapData
     timeline: list[TurnEntry]
+
+
+class SimulationSummary(BaseModel):
+    id: str
+    question: str
+    status: Literal["pending", "running", "done", "error"]
+    turns: int
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    error: Optional[str] = None
+
+
+class SimulationListResponse(BaseModel):
+    items: list[SimulationSummary]
