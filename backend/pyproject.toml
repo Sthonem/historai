@@ -9,6 +9,7 @@ dependencies = [
     "google-genai",
     "python-dotenv",
     "pydantic",
+    "supabase",
 ]
 
 [build-system]

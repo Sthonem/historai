@@ -75,6 +75,10 @@ Backend (`.env`):
 | `GEMINI_MODEL` | `gemini-2.0-flash` | Gemini model id. |
 | `LLM_TEMPERATURE` | `0.7` | Sampling temperature. |
 | `LLM_MAX_TOKENS` | `800` | Max tokens per Groq call. |
+| `SUPABASE_URL` | unset | Optional. If set with `SUPABASE_KEY`, simulations persist to Supabase. |
+| `SUPABASE_KEY` | unset | Optional. Service-role key (not the anon key). |
+
+If you set the Supabase variables, apply `backend/migrations/001_simulations.sql` against your project once (Supabase SQL editor works fine). Without those variables, simulations live in process memory and disappear on restart.
 
 Frontend (`.env.local`):
 
@@ -97,8 +101,8 @@ Frontend (`.env.local`):
 - [x] Turn-by-turn timeline
 - [x] Territorial map visualization
 - [x] Configurable simulation length
+- [x] Supabase persistence + history page
 - [ ] Parallel timelines with probability analysis
-- [ ] Supabase persistence
 - [ ] Auth + simulation limits
 - [ ] Deploy
 
