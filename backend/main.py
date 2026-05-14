@@ -16,9 +16,12 @@ allowed_origins = [
     if origin.strip()
 ]
 
+allow_origin_regex = os.getenv("CORS_ALLOWED_ORIGIN_REGEX") or None
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
