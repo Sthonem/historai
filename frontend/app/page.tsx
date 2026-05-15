@@ -8,6 +8,7 @@ import { initSimulation } from './lib/api'
 
 const EXAMPLES = [
   'What if the Ottoman Empire had not entered World War I?',
+  'What if Atatürk had lived until 1960?',
   'What if Napoleon had won the Battle of Waterloo?',
   'What if the Soviet Union had not collapsed in 1991?',
   'What if Julius Caesar had not been assassinated?',
