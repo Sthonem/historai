@@ -13,7 +13,7 @@ const EXAMPLES = [
   'What if Julius Caesar had not been assassinated?',
 ]
 
-const DEFAULT_TURNS = 6
+const DEFAULT_TURNS = 1
 
 export default function Home() {
   const [question, setQuestion] = useState('')
@@ -86,22 +86,28 @@ export default function Home() {
               }}
             />
 
-            <div className="flex items-center justify-between gap-3 px-1">
-              <label className="text-xs text-zinc-500 uppercase tracking-widest" htmlFor="turns">
-                Turns
-              </label>
-              <div className="flex items-center gap-3 flex-1 max-w-xs">
-                <input
-                  id="turns"
-                  type="range"
-                  min={1}
-                  max={12}
-                  value={turns}
-                  onChange={(e) => setTurns(Number(e.target.value))}
-                  className="flex-1 accent-white"
-                />
-                <span className="text-sm text-zinc-300 tabular-nums w-6 text-right">{turns}</span>
+            <div className="space-y-2 px-1">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-xs text-zinc-500 uppercase tracking-widest" htmlFor="turns">
+                  Turns
+                </label>
+                <div className="flex items-center gap-3 flex-1 max-w-xs">
+                  <input
+                    id="turns"
+                    type="range"
+                    min={1}
+                    max={12}
+                    value={turns}
+                    onChange={(e) => setTurns(Number(e.target.value))}
+                    className="flex-1 accent-white"
+                  />
+                  <span className="text-sm text-zinc-300 tabular-nums w-6 text-right">{turns}</span>
+                </div>
               </div>
+              <p className="text-[11px] text-zinc-600 leading-relaxed">
+                Tip: keep it at <span className="text-zinc-400">1 turn</span> while trying things
+                out — each extra turn calls the LLM once per actor and burns tokens fast.
+              </p>
             </div>
 
             <button
