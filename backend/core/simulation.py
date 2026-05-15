@@ -1,5 +1,6 @@
 import logging
 import random
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, Optional
 
 from core.llm import llm_call
@@ -36,7 +37,17 @@ RANDOM_EVENTS_CONCENTRATED = [
 
 DEFAULT_TURNS = 6
 BASE_EVENT_PROBABILITY = 0.25
-MEMORY_WINDOW = 5
+
+# How many past turn summaries to keep in the world state for each actor prompt.
+# Older summaries are dropped so the prompt stays roughly constant in size
+# regardless of how many turns have passed.
+WORLD_STATE_WINDOW = 2
+
+# Per-actor memory window (in turns). Each actor only remembers their last
+# few actions; this keeps the per-call prompt compact.
+ACTOR_MEMORY_WINDOW = 3
+
+ACTOR_DECISION_MAX_TOKENS = 220
 
 
 def _emit(callback: Optional[EventCallback], event_type: str, **payload) -> None:
@@ -67,13 +78,15 @@ def _world_state_summary(turn_num: int, decisions: dict[str, str], actors: list[
     for idx, (name, decision) in enumerate(ordered):
         influence = influence_map.get(name, 5)
         if idx < 2:
-            quote = decision.strip()
+            quote = decision.strip()[:220].rstrip()
+            if len(decision) > 220:
+                quote += "..."
         elif idx < 4:
-            quote = decision.strip()[:180].rstrip() + ("..." if len(decision) > 180 else "")
+            quote = decision.strip()[:140].rstrip() + ("..." if len(decision) > 140 else "")
         else:
-            quote = decision.strip()[:80].rstrip() + ("..." if len(decision) > 80 else "")
-        lines.append(f"- {name} (influence {influence}): {quote}")
-    return f"[Turn {turn_num} Summary — ordered by influence]\n" + "\n".join(lines)
+            quote = decision.strip()[:70].rstrip() + ("..." if len(decision) > 70 else "")
+        lines.append(f"- {name} (infl {influence}): {quote}")
+    return f"[Turn {turn_num} — by influence]\n" + "\n".join(lines)
 
 
 def _event_probability(actors: list[dict]) -> tuple[float, list[str]]:
@@ -95,6 +108,19 @@ def _event_probability(actors: list[dict]) -> tuple[float, list[str]]:
     return probability, RANDOM_EVENTS_GENERAL
 
 
+def _build_world_state(
+    base: str,
+    recent_summaries: list[str],
+    current_event: Optional[str],
+) -> str:
+    parts = [base.strip()]
+    if recent_summaries:
+        parts.append("\n\n".join(recent_summaries[-WORLD_STATE_WINDOW:]))
+    if current_event:
+        parts.append(f"[Unexpected event this turn: {current_event}]")
+    return "\n\n".join(parts)
+
+
 def run_actor_decision(
     actor: dict,
     world_state: str,
@@ -102,31 +128,82 @@ def run_actor_decision(
     rank: int,
     total: int,
 ) -> str:
-    memory_text = "\n".join(memory[-MEMORY_WINDOW:]) if memory else "No previous actions."
+    memory_text = (
+        "\n".join(memory[-ACTOR_MEMORY_WINDOW:]) if memory else "No previous actions."
+    )
     label = _influence_label(rank, total, actor["influence"])
 
-    prompt = f"""
-You are {actor['name']}, {actor['role']} during this historical scenario.
+    prompt = f"""You are {actor['name']}, {actor['role']}.
 
-Your motivation: {actor['motivation']}
-Your faction: {actor['faction']}
-Your standing in this moment: {label}
+Motivation: {actor['motivation']}
+Faction: {actor['faction']}
+Standing: {label}
 
-Recent history:
+Recent personal moves:
 {memory_text}
 
 Current situation:
 {world_state}
 
-What do you do and say in response to the current situation?
-Respond in 2-3 sentences, in first person, as {actor['name']}.
-Be specific, historically consistent, and let your relative power shape your tone:
-high-influence actors give orders, mid-tier actors maneuver, low-influence actors plead, scheme, or rally support.
-"""
+In 2-3 sentences, first-person, respond. Be specific and let your power level
+shape your tone: high-influence actors give orders, mid-tier maneuver,
+low-influence plead, scheme, or rally support."""
     return llm_call(
         prompt,
-        system=f"You are {actor['name']}, a historical figure. Respond authentically in first person.",
+        system=f"You are {actor['name']}. Respond authentically in first person, 2-3 sentences.",
+        max_tokens=ACTOR_DECISION_MAX_TOKENS,
     )
+
+
+def _run_actors_parallel(
+    actors_sorted: list[dict],
+    world_state: str,
+    memories: dict[str, list[str]],
+    turn_num: int,
+    on_event: Optional[EventCallback],
+) -> dict[str, str]:
+    """Run all actor decisions for a turn concurrently.
+
+    Each call is I/O-bound (LLM HTTP request) so a thread pool gives a near
+    linear wall-clock win. Streaming events (``actor_thinking`` /
+    ``actor_decided``) fire as the futures progress.
+    """
+    total = len(actors_sorted)
+    decisions: dict[str, str] = {}
+
+    for actor in actors_sorted:
+        _emit(on_event, "actor_thinking", turn=turn_num, actor=actor["name"])
+
+    with ThreadPoolExecutor(max_workers=min(8, max(1, total))) as pool:
+        futures = {}
+        for rank, actor in enumerate(actors_sorted):
+            future = pool.submit(
+                run_actor_decision,
+                actor,
+                world_state,
+                memories[actor["name"]],
+                rank,
+                total,
+            )
+            futures[future] = actor
+
+        for future in as_completed(futures):
+            actor = futures[future]
+            try:
+                decision = future.result()
+            except Exception as exc:
+                logger.warning("Actor %s decision failed: %s", actor["name"], exc)
+                decision = "(No response — communication lines disrupted.)"
+            decisions[actor["name"]] = decision
+            _emit(
+                on_event,
+                "actor_decided",
+                turn=turn_num,
+                actor=actor["name"],
+                decision=decision,
+            )
+
+    return decisions
 
 
 def run_simulation(
@@ -137,29 +214,22 @@ def run_simulation(
 ) -> dict:
     """Run the multi-turn simulation, optionally streaming progress via ``on_event``.
 
-    Emitted event types:
-      - ``simulation_started`` ``{question, turns, actors}``
-      - ``turn_started`` ``{turn}``
-      - ``event_injected`` ``{turn, event}``
-      - ``actor_thinking`` ``{turn, actor}``
-      - ``actor_decided`` ``{turn, actor, decision}``
-      - ``turn_completed`` ``{turn, decisions, event}``
-      - ``simulation_completed`` ``{turns: int}``
+    Actor decisions within a turn run concurrently. The world-state summary
+    fed back into each prompt is windowed (last ``WORLD_STATE_WINDOW`` turns)
+    so prompts stay roughly constant in size across the simulation.
     """
 
-    world_state = f"""
-Historical what-if scenario: {question}
-
-The divergence point has just occurred. History has changed.
-Key actors are now responding to this new reality.
-"""
+    world_state_base = (
+        f"Historical what-if scenario: {question}\n\n"
+        "The divergence point has just occurred. History has changed.\n"
+        "Key actors are now responding to this new reality."
+    )
 
     memories: dict[str, list[str]] = {actor["name"]: [] for actor in actors}
+    recent_summaries: list[str] = []
     all_turns: list[dict] = []
 
     actors_sorted = sorted(actors, key=lambda a: a["influence"], reverse=True)
-    total_actors = len(actors_sorted)
-
     event_probability, event_pool = _event_probability(actors_sorted)
     pool_label = (
         "concentrated"
@@ -179,45 +249,38 @@ Key actors are now responding to this new reality.
     for turn_num in range(1, turns + 1):
         _emit(on_event, "turn_started", turn=turn_num)
 
-        turn_data: dict = {
-            "turn": turn_num,
-            "world_state": world_state,
-            "decisions": {},
-            "event": None,
-        }
-
+        event = None
         if random.random() < event_probability:
             event = random.choice(event_pool)
-            world_state += f"\n[Unexpected event: {event}]"
-            turn_data["event"] = event
             _emit(on_event, "event_injected", turn=turn_num, event=event)
 
-        for rank, actor in enumerate(actors_sorted):
-            _emit(on_event, "actor_thinking", turn=turn_num, actor=actor["name"])
-            try:
-                decision = run_actor_decision(
-                    actor,
-                    world_state,
-                    memories[actor["name"]],
-                    rank=rank,
-                    total=total_actors,
-                )
-            except Exception as exc:
-                logger.warning("Actor %s decision failed: %s", actor["name"], exc)
-                decision = "(No response — communication lines disrupted.)"
-            turn_data["decisions"][actor["name"]] = decision
-            memories[actor["name"]].append(f"Turn {turn_num}: {decision}")
-            _emit(on_event, "actor_decided", turn=turn_num, actor=actor["name"], decision=decision)
+        world_state = _build_world_state(world_state_base, recent_summaries, event)
 
-        world_state += "\n\n" + _world_state_summary(turn_num, turn_data["decisions"], actors_sorted)
+        decisions = _run_actors_parallel(
+            actors_sorted, world_state, memories, turn_num, on_event
+        )
+
+        for name, decision in decisions.items():
+            memories[name].append(f"T{turn_num}: {decision[:160]}")
+
+        summary = _world_state_summary(turn_num, decisions, actors_sorted)
+        recent_summaries.append(summary)
+        if len(recent_summaries) > WORLD_STATE_WINDOW:
+            recent_summaries.pop(0)
+
+        turn_data = {
+            "turn": turn_num,
+            "decisions": decisions,
+            "event": event,
+        }
         all_turns.append(turn_data)
 
         _emit(
             on_event,
             "turn_completed",
             turn=turn_num,
-            decisions=turn_data["decisions"],
-            event=turn_data["event"],
+            decisions=decisions,
+            event=event,
         )
 
     _emit(on_event, "simulation_completed", turns=turns)
@@ -226,5 +289,5 @@ Key actors are now responding to this new reality.
         "question": question,
         "actors": actors,
         "turns": all_turns,
-        "final_world_state": world_state,
+        "final_world_state": _build_world_state(world_state_base, recent_summaries, None),
     }
