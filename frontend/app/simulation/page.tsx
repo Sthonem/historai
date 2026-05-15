@@ -32,12 +32,7 @@ function SimulationContent() {
   const [totalTurns, setTotalTurns] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const turnsRef = useRef<TurnView[]>([])
   const bottomRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    turnsRef.current = turns
-  }, [turns])
 
   useEffect(() => {
     if (!simulationId) return
@@ -146,7 +141,7 @@ function SimulationContent() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [turns])
+  }, [turns.length])
 
   const headline = useMemo(() => {
     if (phase === 'error') return 'Simulation failed'
@@ -159,6 +154,8 @@ function SimulationContent() {
       ? `Turn ${current.turn} of ${totalTurns}`
       : `Turn ${current.turn}`
   }, [phase, turns, totalTurns])
+
+  const lastIndex = turns.length - 1
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
@@ -213,7 +210,7 @@ function SimulationContent() {
           </div>
         )}
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           {turns.length === 0 && phase !== 'error' && (
             <div className="flex items-center gap-3 py-12 justify-center">
               <div className="w-5 h-5 border border-zinc-700 border-t-white rounded-full animate-spin" />
@@ -221,52 +218,8 @@ function SimulationContent() {
             </div>
           )}
 
-          {turns.map((turn) => (
-            <div
-              key={turn.turn}
-              className="border border-zinc-900 bg-zinc-950 rounded-2xl p-5 space-y-4"
-            >
-              <div className="flex items-center gap-2">
-                <div
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    turn.completed ? 'bg-emerald-500' : 'bg-amber-400 animate-pulse'
-                  }`}
-                />
-                <span className="text-xs text-zinc-500 uppercase tracking-widest font-medium">
-                  Turn {turn.turn}
-                </span>
-              </div>
-
-              {turn.event && (
-                <div className="flex items-start gap-2 bg-amber-950/30 border border-amber-900/30 rounded-xl px-3 py-2">
-                  <span className="text-amber-500 text-xs mt-0.5">⚡</span>
-                  <p className="text-amber-400 text-sm">{turn.event}</p>
-                </div>
-              )}
-
-              <div className="space-y-3">
-                {turn.lines.map((line) => (
-                  <div
-                    key={line.actor}
-                    className="flex items-start gap-4 py-2 border-b border-zinc-900 last:border-0"
-                  >
-                    <span className="text-zinc-500 text-sm shrink-0 w-36 truncate pt-0.5">
-                      {line.actor}
-                    </span>
-                    {line.thinking ? (
-                      <span className="text-zinc-600 text-sm italic flex items-center gap-2">
-                        <span className="w-1 h-1 rounded-full bg-zinc-600 animate-pulse" />
-                        thinking…
-                      </span>
-                    ) : (
-                      <span className="text-zinc-300 text-sm leading-relaxed">
-                        {line.decision}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+          {turns.map((turn, idx) => (
+            <TurnCard key={turn.turn} turn={turn} isCurrent={idx === lastIndex} />
           ))}
 
           {phase === 'generating_report' && (
@@ -281,6 +234,69 @@ function SimulationContent() {
         <div ref={bottomRef} />
       </div>
     </main>
+  )
+}
+
+function TurnCard({ turn, isCurrent }: { turn: TurnView; isCurrent: boolean }) {
+  const thinkingCount = turn.lines.filter((l) => l.thinking).length
+  const decidedCount = turn.lines.filter((l) => !l.thinking && l.decision).length
+  const total = turn.lines.length
+
+  return (
+    <details
+      key={turn.turn}
+      open={isCurrent}
+      className="group rounded-2xl bg-zinc-950 border border-zinc-900 open:border-zinc-700 transition-colors"
+    >
+      <summary className="cursor-pointer list-none p-4 flex items-start gap-3">
+        <div
+          className={`w-7 h-7 shrink-0 rounded-full grid place-items-center text-xs font-medium border ${
+            turn.completed
+              ? 'bg-emerald-950/40 border-emerald-900/50 text-emerald-300'
+              : 'bg-amber-950/30 border-amber-900/40 text-amber-300'
+          }`}
+        >
+          {turn.turn}
+        </div>
+        <div className="min-w-0 flex-1 space-y-1">
+          {turn.event ? (
+            <p className="text-amber-300 text-sm leading-snug flex items-start gap-1.5">
+              <span className="text-amber-500 mt-0.5">⚡</span>
+              <span>{turn.event}</span>
+            </p>
+          ) : (
+            <p className="text-zinc-500 text-sm">
+              {turn.completed ? 'Turn complete — no major event' : 'Setting the stage…'}
+            </p>
+          )}
+          <p className="text-zinc-600 text-xs">
+            {turn.completed
+              ? `${decidedCount} decision${decidedCount === 1 ? '' : 's'}`
+              : `${decidedCount}/${total || '?'} decided${thinkingCount ? ` • ${thinkingCount} thinking` : ''}`}
+          </p>
+        </div>
+        <span className="text-zinc-600 group-open:rotate-180 transition-transform text-xs mt-1">▾</span>
+      </summary>
+      <div className="px-4 pb-4 pt-0">
+        <div className="ml-10 border-t border-zinc-900 pt-3 space-y-3">
+          {turn.lines.map((line) => (
+            <div key={line.actor} className="flex items-start gap-4">
+              <span className="text-zinc-500 text-xs shrink-0 w-32 truncate pt-0.5">
+                {line.actor}
+              </span>
+              {line.thinking ? (
+                <span className="text-zinc-600 text-sm italic flex items-center gap-2">
+                  <span className="w-1 h-1 rounded-full bg-zinc-600 animate-pulse" />
+                  thinking…
+                </span>
+              ) : (
+                <span className="text-zinc-300 text-sm leading-relaxed">{line.decision}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </details>
   )
 }
 
