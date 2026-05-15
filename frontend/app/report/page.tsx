@@ -1,12 +1,12 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 
 import { ApiError, getReport } from '../lib/api'
-import type { Report } from '../lib/types'
+import type { ActorCard, Report, TimelineTurn } from '../lib/types'
 
 const HistoryMap = dynamic(() => import('../components/HistoryMap'), { ssr: false })
 
@@ -85,107 +85,36 @@ function ReportContent() {
         <span className="text-zinc-600 text-xs">Alternate history report</span>
       </div>
 
-      <div className="max-w-3xl mx-auto px-6 py-12 space-y-16">
+      <div className="max-w-3xl mx-auto px-6 py-12 space-y-14">
 
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span className="text-emerald-500 text-xs uppercase tracking-widest font-medium">Simulation complete</span>
-          </div>
-          <h1 className="text-3xl font-bold leading-tight tracking-tight">
-            {report.question}
-          </h1>
-        </div>
+        <Hero question={report.question} narrative={report.narrative} />
 
         {report.map_data && report.map_data.factions.length > 0 && (
-          <div className="space-y-6">
-            <div className="flex items-center gap-3">
-              <h2 className="text-xs uppercase tracking-widest text-zinc-500 font-medium">Territorial control</h2>
-              <div className="flex-1 h-px bg-zinc-900" />
-            </div>
+          <Section title="Territorial control">
             <HistoryMap mapData={report.map_data} />
-          </div>
+          </Section>
         )}
 
-        <div className="space-y-6">
-          <div className="flex items-center gap-3">
-            <h2 className="text-xs uppercase tracking-widest text-zinc-500 font-medium">Analysis</h2>
-            <div className="flex-1 h-px bg-zinc-900" />
-          </div>
-          <div className="space-y-5">
-            {report.narrative.split('\n\n').map((para, i) => (
-              <p key={i} className="text-zinc-300 leading-relaxed text-[15px]">{para}</p>
-            ))}
-          </div>
-        </div>
+        <Section title="Analysis">
+          <Narrative text={report.narrative} />
+        </Section>
 
-        <div className="space-y-6">
-          <div className="flex items-center gap-3">
-            <h2 className="text-xs uppercase tracking-widest text-zinc-500 font-medium">Key actors</h2>
-            <div className="flex-1 h-px bg-zinc-900" />
-          </div>
-          <div className="space-y-3">
+        <Section title="Key actors" trailing={`${report.actor_cards.length} actors`}>
+          <div className="space-y-2">
             {report.actor_cards.map((actor) => (
-              <div
-                key={`${actor.name}-${actor.faction}`}
-                className="group border border-zinc-900 hover:border-zinc-700 rounded-2xl p-5 transition-all duration-200 bg-zinc-950"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-white">{actor.name}</span>
-                      <span className="text-[11px] text-zinc-500 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded-full">
-                        {actor.faction}
-                      </span>
-                    </div>
-                    <p className="text-zinc-500 text-sm">{actor.role}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[11px] text-zinc-600 uppercase tracking-wider">influence</p>
-                    <p className="text-2xl font-bold text-white">{actor.influence}</p>
-                  </div>
-                </div>
-                <p className="text-zinc-400 text-sm leading-relaxed">{actor.summary}</p>
-              </div>
+              <ActorRow key={`${actor.name}-${actor.faction}`} actor={actor} />
             ))}
           </div>
-        </div>
+        </Section>
 
         {report.timeline && report.timeline.length > 0 && (
-          <div className="space-y-6">
-            <div className="flex items-center gap-3">
-              <h2 className="text-xs uppercase tracking-widest text-zinc-500 font-medium">Timeline</h2>
-              <div className="flex-1 h-px bg-zinc-900" />
-            </div>
-            <div className="space-y-4">
+          <Section title="Timeline" trailing={`${report.timeline.length} turns`}>
+            <div className="space-y-2">
               {report.timeline.map((turn) => (
-                <div key={turn.turn} className="border border-zinc-900 bg-zinc-950 rounded-2xl p-5 space-y-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
-                    <span className="text-xs text-zinc-500 uppercase tracking-widest font-medium">
-                      Turn {turn.turn}
-                    </span>
-                  </div>
-
-                  {turn.event && (
-                    <div className="flex items-start gap-2 bg-amber-950/30 border border-amber-900/30 rounded-xl px-3 py-2">
-                      <span className="text-amber-500 text-xs mt-0.5">⚡</span>
-                      <p className="text-amber-400 text-sm">{turn.event}</p>
-                    </div>
-                  )}
-
-                  <div className="space-y-3">
-                    {Object.entries(turn.decisions).map(([actor, decision]) => (
-                      <div key={actor} className="flex items-start gap-4 py-2 border-b border-zinc-900 last:border-0">
-                        <span className="text-zinc-500 text-sm shrink-0 w-36 truncate pt-0.5">{actor}</span>
-                        <span className="text-zinc-300 text-sm leading-relaxed">{decision}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <TimelineRow key={turn.turn} turn={turn} />
               ))}
             </div>
-          </div>
+          </Section>
         )}
 
         <div className="pt-8 border-t border-zinc-900 flex items-center justify-between">
@@ -198,6 +127,169 @@ function ReportContent() {
       </div>
     </main>
   )
+}
+
+function Hero({ question, narrative }: { question: string; narrative: string }) {
+  const tldr = useMemo(() => deriveTldr(narrative), [narrative])
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+        <span className="text-emerald-500 text-xs uppercase tracking-widest font-medium">Simulation complete</span>
+      </div>
+      <h1 className="text-3xl font-bold leading-tight tracking-tight">{question}</h1>
+      {tldr && (
+        <p className="text-zinc-300 text-[15px] leading-relaxed border-l-2 border-zinc-700 pl-4">
+          {tldr}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function Section({
+  title,
+  trailing,
+  children,
+}: {
+  title: string
+  trailing?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-3">
+        <h2 className="text-xs uppercase tracking-widest text-zinc-500 font-medium">{title}</h2>
+        <div className="flex-1 h-px bg-zinc-900" />
+        {trailing && <span className="text-[11px] text-zinc-600">{trailing}</span>}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function Narrative({ text }: { text: string }) {
+  const paragraphs = useMemo(() => text.split(/\n\n+/).filter((p) => p.trim().length > 0), [text])
+  const [expanded, setExpanded] = useState(false)
+  const showToggle = paragraphs.length > 1
+  const visible = expanded || !showToggle ? paragraphs : paragraphs.slice(0, 1)
+  return (
+    <div className="space-y-5">
+      {visible.map((para, i) => (
+        <p key={i} className="text-zinc-300 leading-relaxed text-[15px]">
+          {para}
+        </p>
+      ))}
+      {showToggle && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="text-xs text-zinc-500 hover:text-white transition tracking-wide"
+        >
+          {expanded ? '— Show less' : `↓ Read full analysis (${paragraphs.length - 1} more)`}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function ActorRow({ actor }: { actor: ActorCard }) {
+  return (
+    <details className="group rounded-2xl bg-zinc-950 border border-zinc-900 open:border-zinc-700 transition-colors">
+      <summary className="cursor-pointer list-none p-4 flex items-center gap-4">
+        <span className="w-9 h-9 shrink-0 rounded-full bg-zinc-900 border border-zinc-800 grid place-items-center text-zinc-400 text-sm font-medium">
+          {initials(actor.name)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-medium text-white truncate">{actor.name}</span>
+            <span className="text-[10px] text-zinc-500 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded-full">
+              {actor.faction}
+            </span>
+          </div>
+          <p className="text-zinc-500 text-xs truncate">{actor.role}</p>
+        </div>
+        <InfluenceBar value={actor.influence} />
+        <span className="text-zinc-600 group-open:rotate-180 transition-transform text-xs">▾</span>
+      </summary>
+      <div className="px-4 pb-4 pt-0">
+        <div className="ml-[52px] border-t border-zinc-900 pt-3">
+          <p className="text-zinc-400 text-sm leading-relaxed">{actor.summary}</p>
+        </div>
+      </div>
+    </details>
+  )
+}
+
+function InfluenceBar({ value }: { value: number }) {
+  const pct = Math.max(0, Math.min(10, value)) * 10
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      <div className="w-16 h-1 bg-zinc-900 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-zinc-400"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="text-zinc-400 text-xs tabular-nums w-4 text-right">{value}</span>
+    </div>
+  )
+}
+
+function TimelineRow({ turn }: { turn: TimelineTurn }) {
+  const decisionCount = Object.keys(turn.decisions).length
+  return (
+    <details className="group rounded-2xl bg-zinc-950 border border-zinc-900 open:border-zinc-700 transition-colors">
+      <summary className="cursor-pointer list-none p-4 flex items-start gap-3">
+        <div className="w-7 h-7 shrink-0 rounded-full bg-zinc-900 border border-zinc-800 grid place-items-center text-zinc-400 text-xs font-medium">
+          {turn.turn}
+        </div>
+        <div className="min-w-0 flex-1 space-y-1">
+          {turn.event ? (
+            <p className="text-amber-300 text-sm leading-snug flex items-start gap-1.5">
+              <span className="text-amber-500 mt-0.5">⚡</span>
+              <span>{turn.event}</span>
+            </p>
+          ) : (
+            <p className="text-zinc-500 text-sm italic">Quiet turn — no major event</p>
+          )}
+          <p className="text-zinc-600 text-xs">{decisionCount} decision{decisionCount === 1 ? '' : 's'}</p>
+        </div>
+        <span className="text-zinc-600 group-open:rotate-180 transition-transform text-xs mt-1">▾</span>
+      </summary>
+      <div className="px-4 pb-4 pt-0">
+        <div className="ml-10 border-t border-zinc-900 pt-3 space-y-3">
+          {Object.entries(turn.decisions).map(([actor, decision]) => (
+            <div key={actor} className="flex items-start gap-4">
+              <span className="text-zinc-500 text-xs shrink-0 w-32 truncate pt-0.5">{actor}</span>
+              <span className="text-zinc-300 text-sm leading-relaxed">{decision}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </details>
+  )
+}
+
+function deriveTldr(narrative: string): string | null {
+  const firstParagraph = narrative.split(/\n\n+/)[0]?.trim()
+  if (!firstParagraph) return null
+  const sentences = firstParagraph.match(/[^.!?]+[.!?]+/g)
+  if (!sentences || sentences.length === 0) {
+    return firstParagraph.length > 220 ? firstParagraph.slice(0, 220).trim() + '…' : firstParagraph
+  }
+  const first = sentences[0].trim()
+  if (first.length > 180 || sentences.length === 1) return first
+  return (first + ' ' + sentences[1].trim()).trim()
+}
+
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('')
 }
 
 export default function ReportPage() {

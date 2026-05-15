@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+from typing import Optional
 
 from dotenv import load_dotenv
 from google import genai
@@ -34,7 +35,7 @@ def _is_rate_limit(error: Exception) -> bool:
     )
 
 
-def _llm_call_groq(prompt: str, system: str) -> str:
+def _llm_call_groq(prompt: str, system: str, max_tokens: int) -> str:
     response = groq_client.chat.completions.create(
         model=GROQ_MODEL,
         messages=[
@@ -42,31 +43,41 @@ def _llm_call_groq(prompt: str, system: str) -> str:
             {"role": "user", "content": prompt},
         ],
         temperature=TEMPERATURE,
-        max_tokens=MAX_TOKENS,
+        max_tokens=max_tokens,
     )
     return response.choices[0].message.content
 
 
-def _llm_call_gemini(prompt: str, system: str) -> str:
+def _llm_call_gemini(prompt: str, system: str, max_tokens: int) -> str:
     full_prompt = f"{system}\n\n{prompt}"
     response = gemini_client.models.generate_content(
         model=GEMINI_MODEL,
         contents=full_prompt,
+        config={"max_output_tokens": max_tokens},
     )
     return response.text
 
 
-def llm_call(prompt: str, system: str = "You are a helpful historical analysis assistant.") -> str:
+def llm_call(
+    prompt: str,
+    system: str = "You are a helpful historical analysis assistant.",
+    *,
+    max_tokens: Optional[int] = None,
+) -> str:
     """Call the primary LLM (Groq) with a Gemini fallback on rate limits or errors.
 
     Retries each provider once on rate-limit, then gives up with ``LLMError``.
+
+    ``max_tokens`` overrides the global ``LLM_MAX_TOKENS`` ceiling for this call.
+    Tight per-call budgets are the cheapest way to keep token usage down.
     """
 
+    budget = max_tokens if max_tokens is not None else MAX_TOKENS
     last_error: Exception | None = None
 
     for attempt in range(2):
         try:
-            return _llm_call_groq(prompt, system)
+            return _llm_call_groq(prompt, system, budget)
         except Exception as exc:
             last_error = exc
             if _is_rate_limit(exc) and attempt == 0:
@@ -78,7 +89,7 @@ def llm_call(prompt: str, system: str = "You are a helpful historical analysis a
 
     for attempt in range(2):
         try:
-            return _llm_call_gemini(prompt, system)
+            return _llm_call_gemini(prompt, system, budget)
         except Exception as exc:
             last_error = exc
             if _is_rate_limit(exc) and attempt == 0:

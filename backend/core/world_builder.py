@@ -49,6 +49,7 @@ Example format:
     response = llm_call(
         prompt,
         system="You are a historical analysis expert. Always respond with valid JSON only.",
+        max_tokens=900,
     )
 
     actors = _extract_json_array(response)
