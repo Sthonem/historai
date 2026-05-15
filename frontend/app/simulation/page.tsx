@@ -33,11 +33,13 @@ function SimulationContent() {
   const [error, setError] = useState<string | null>(null)
 
   const bottomRef = useRef<HTMLDivElement | null>(null)
+  const sourceRef = useRef<EventSource | null>(null)
 
   useEffect(() => {
     if (!simulationId) return
 
     const source = new EventSource(streamUrl(simulationId))
+    sourceRef.current = source
 
     const handle = (raw: MessageEvent) => {
       let evt: StreamEvent
@@ -136,8 +138,15 @@ function SimulationContent() {
 
     return () => {
       source.close()
+      sourceRef.current = null
     }
   }, [simulationId, router])
+
+  const handleCancel = () => {
+    sourceRef.current?.close()
+    sourceRef.current = null
+    router.push('/')
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -163,7 +172,17 @@ function SimulationContent() {
         <Link href="/" className="text-zinc-500 hover:text-white transition text-sm">
           ← Historai
         </Link>
-        <span className="text-zinc-600 text-xs">Live simulation</span>
+        {phase !== 'done' && phase !== 'error' ? (
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="text-zinc-500 hover:text-rose-400 transition text-xs uppercase tracking-widest"
+          >
+            Cancel
+          </button>
+        ) : (
+          <span className="text-zinc-600 text-xs">Live simulation</span>
+        )}
       </div>
 
       <div className="max-w-3xl mx-auto px-6 py-10 space-y-8">

@@ -71,6 +71,12 @@ function ActorsContent() {
         <div className="space-y-1">
           <p className="text-xs text-zinc-600 uppercase tracking-widest">Your question</p>
           <h2 className="text-xl text-zinc-200 font-medium leading-snug">&ldquo;{question}&rdquo;</h2>
+          <Link
+            href="/"
+            className="inline-block text-xs text-zinc-500 hover:text-white transition pt-1"
+          >
+            ← Change question
+          </Link>
         </div>
 
         <div className="space-y-4">

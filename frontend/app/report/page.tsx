@@ -89,11 +89,7 @@ function ReportContent() {
 
         <Hero question={report.question} narrative={report.narrative} />
 
-        {report.map_data && report.map_data.factions.length > 0 && (
-          <Section title="Territorial control">
-            <HistoryMap mapData={report.map_data} />
-          </Section>
-        )}
+        <MapOrBalance report={report} />
 
         <Section title="Analysis">
           <Narrative text={report.narrative} />
@@ -101,8 +97,12 @@ function ReportContent() {
 
         <Section title="Key actors" trailing={`${report.actor_cards.length} actors`}>
           <div className="space-y-2">
-            {report.actor_cards.map((actor) => (
-              <ActorRow key={`${actor.name}-${actor.faction}`} actor={actor} />
+            {report.actor_cards.map((actor, idx) => (
+              <ActorRow
+                key={`${actor.name}-${actor.faction}`}
+                actor={actor}
+                defaultOpen={idx === 0}
+              />
             ))}
           </div>
         </Section>
@@ -110,8 +110,8 @@ function ReportContent() {
         {report.timeline && report.timeline.length > 0 && (
           <Section title="Timeline" trailing={`${report.timeline.length} turns`}>
             <div className="space-y-2">
-              {report.timeline.map((turn) => (
-                <TimelineRow key={turn.turn} turn={turn} />
+              {report.timeline.map((turn, idx) => (
+                <TimelineRow key={turn.turn} turn={turn} defaultOpen={idx === 0} />
               ))}
             </div>
           </Section>
@@ -127,6 +127,75 @@ function ReportContent() {
       </div>
     </main>
   )
+}
+
+function MapOrBalance({ report }: { report: Report }) {
+  const totalCountries = report.map_data?.factions.reduce(
+    (acc, f) => acc + (f.countries?.length ?? 0),
+    0,
+  ) ?? 0
+  const mapIsViable =
+    !!report.map_data &&
+    report.map_data.factions.length >= 2 &&
+    totalCountries >= 4
+
+  if (mapIsViable) {
+    return (
+      <Section title="Territorial control" trailing={report.map_data?.year ?? undefined}>
+        <HistoryMap mapData={report.map_data} />
+      </Section>
+    )
+  }
+
+  const balance = factionPowerBalance(report.actor_cards)
+  if (balance.length === 0) return null
+
+  const max = Math.max(...balance.map((b) => b.power))
+  return (
+    <Section title="Power balance" trailing="influence by faction">
+      <div className="space-y-3">
+        {balance.map((row) => {
+          const pct = max > 0 ? (row.power / max) * 100 : 0
+          return (
+            <div key={row.faction} className="space-y-1.5">
+              <div className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="text-zinc-200 truncate">{row.faction}</span>
+                <span className="text-zinc-500 text-xs tabular-nums shrink-0">
+                  {row.power} · {row.actors} actor{row.actors === 1 ? '' : 's'}
+                </span>
+              </div>
+              <div className="h-1.5 bg-zinc-900 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-zinc-400"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          )
+        })}
+        <p className="text-[11px] text-zinc-600 pt-2">
+          This scenario doesn&rsquo;t cleanly map to territory, so we&rsquo;re showing
+          which factions hold the most weight instead.
+        </p>
+      </div>
+    </Section>
+  )
+}
+
+function factionPowerBalance(
+  actors: ActorCard[],
+): { faction: string; power: number; actors: number }[] {
+  const byFaction = new Map<string, { power: number; actors: number }>()
+  for (const a of actors) {
+    const key = a.faction || 'Independent'
+    const cur = byFaction.get(key) ?? { power: 0, actors: 0 }
+    cur.power += a.influence
+    cur.actors += 1
+    byFaction.set(key, cur)
+  }
+  return Array.from(byFaction.entries())
+    .map(([faction, v]) => ({ faction, ...v }))
+    .sort((a, b) => b.power - a.power)
 }
 
 function Hero({ question, narrative }: { question: string; narrative: string }) {
@@ -153,7 +222,7 @@ function Section({
   children,
 }: {
   title: string
-  trailing?: string
+  trailing?: string | null
   children: React.ReactNode
 }) {
   return (
@@ -193,9 +262,12 @@ function Narrative({ text }: { text: string }) {
   )
 }
 
-function ActorRow({ actor }: { actor: ActorCard }) {
+function ActorRow({ actor, defaultOpen = false }: { actor: ActorCard; defaultOpen?: boolean }) {
   return (
-    <details className="group rounded-2xl bg-zinc-950 border border-zinc-900 open:border-zinc-700 transition-colors">
+    <details
+      open={defaultOpen}
+      className="group rounded-2xl bg-zinc-950 border border-zinc-900 open:border-zinc-700 transition-colors"
+    >
       <summary className="cursor-pointer list-none p-4 flex items-center gap-4">
         <span className="w-9 h-9 shrink-0 rounded-full bg-zinc-900 border border-zinc-800 grid place-items-center text-zinc-400 text-sm font-medium">
           {initials(actor.name)}
@@ -236,10 +308,19 @@ function InfluenceBar({ value }: { value: number }) {
   )
 }
 
-function TimelineRow({ turn }: { turn: TimelineTurn }) {
+function TimelineRow({
+  turn,
+  defaultOpen = false,
+}: {
+  turn: TimelineTurn
+  defaultOpen?: boolean
+}) {
   const decisionCount = Object.keys(turn.decisions).length
   return (
-    <details className="group rounded-2xl bg-zinc-950 border border-zinc-900 open:border-zinc-700 transition-colors">
+    <details
+      open={defaultOpen}
+      className="group rounded-2xl bg-zinc-950 border border-zinc-900 open:border-zinc-700 transition-colors"
+    >
       <summary className="cursor-pointer list-none p-4 flex items-start gap-3">
         <div className="w-7 h-7 shrink-0 rounded-full bg-zinc-900 border border-zinc-800 grid place-items-center text-zinc-400 text-xs font-medium">
           {turn.turn}
