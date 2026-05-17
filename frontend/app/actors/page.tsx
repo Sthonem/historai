@@ -60,17 +60,17 @@ function ActorsContent() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
-      <div className="px-6 py-5 border-b border-zinc-900 flex items-center justify-between">
+    <main className="min-h-screen min-h-[100dvh] bg-[#0a0a0a] text-white">
+      <header className="px-4 sm:px-6 py-4 sm:py-5 border-b border-zinc-900 flex items-center justify-between gap-3">
         <Link href="/" className="text-zinc-500 hover:text-white transition text-sm">← Historai</Link>
-        <span className="text-zinc-600 text-xs">Step 1 of 2</span>
-      </div>
+        <span className="text-zinc-600 text-xs shrink-0">Step 1 of 2</span>
+      </header>
 
-      <div className="max-w-3xl mx-auto px-6 py-10 space-y-10">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-8 sm:space-y-10 pb-[max(2rem,env(safe-area-inset-bottom))]">
 
         <div className="space-y-1">
           <p className="text-xs text-zinc-600 uppercase tracking-widest">Your question</p>
-          <h2 className="text-xl text-zinc-200 font-medium leading-snug">&ldquo;{question}&rdquo;</h2>
+          <h2 className="text-lg sm:text-xl text-zinc-200 font-medium leading-snug break-words">&ldquo;{question}&rdquo;</h2>
           <Link
             href="/"
             className="inline-block text-xs text-zinc-500 hover:text-white transition pt-1"
@@ -134,7 +134,7 @@ function ActorsContent() {
             <button
               onClick={handleRun}
               disabled={loading}
-              className="w-full bg-white text-black font-semibold py-3.5 rounded-2xl hover:bg-zinc-100 transition disabled:opacity-30 text-[15px]"
+              className="w-full bg-white text-black font-semibold py-3.5 min-h-[48px] rounded-2xl hover:bg-zinc-100 active:bg-zinc-200 transition disabled:opacity-30 text-[15px]"
             >
               {loading ? 'Starting simulation...' : 'Run simulation →'}
             </button>

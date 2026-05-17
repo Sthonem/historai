@@ -66,17 +66,17 @@ export default function HistoryPage() {
   }, [items, filter])
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
-      <div className="px-6 py-5 border-b border-zinc-900 flex items-center justify-between">
+    <main className="min-h-screen min-h-[100dvh] bg-[#0a0a0a] text-white">
+      <header className="px-4 sm:px-6 py-4 sm:py-5 border-b border-zinc-900 flex items-center justify-between gap-3">
         <Link href="/" className="text-zinc-500 hover:text-white transition text-sm">
           ← Historai
         </Link>
         <span className="text-zinc-600 text-xs">History</span>
-      </div>
+      </header>
 
-      <div className="max-w-3xl mx-auto px-6 py-10 space-y-8">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">Past simulations</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Past simulations</h1>
           <p className="text-zinc-500 text-sm">
             Every what-if you&apos;ve asked. Pick one to reopen the report.
           </p>

@@ -71,10 +71,10 @@ export default function HistoryMap({ mapData }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl overflow-hidden border border-zinc-900 bg-zinc-950">
+      <div className="rounded-2xl overflow-hidden border border-zinc-900 bg-zinc-950 max-h-[min(50vh,340px)] sm:max-h-none overflow-x-auto">
         <ComposableMap
-          projectionConfig={{ scale: 140 }}
-          style={{ width: '100%', height: 'auto' }}
+          projectionConfig={{ scale: 120 }}
+          style={{ width: '100%', height: 'auto', minWidth: 280 }}
         >
           <Geographies geography={GEO_URL}>
             {({ geographies }) =>

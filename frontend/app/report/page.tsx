@@ -77,15 +77,15 @@ function ReportContent() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
-      <div className="border-b border-zinc-900 px-6 py-4 flex items-center justify-between">
+    <main className="min-h-screen min-h-[100dvh] bg-[#0a0a0a] text-white">
+      <header className="border-b border-zinc-900 px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
         <Link href="/" className="text-zinc-500 hover:text-white transition text-sm flex items-center gap-2">
           ← Historai
         </Link>
-        <span className="text-zinc-600 text-xs">Alternate history report</span>
-      </div>
+        <span className="text-zinc-600 text-xs shrink-0 hidden sm:inline">Alternate history report</span>
+      </header>
 
-      <div className="max-w-3xl mx-auto px-6 py-12 space-y-14">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-10 sm:space-y-14 pb-[max(2rem,env(safe-area-inset-bottom))]">
 
         <Hero question={report.question} narrative={report.narrative} />
 
@@ -206,7 +206,7 @@ function Hero({ question, narrative }: { question: string; narrative: string }) 
         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
         <span className="text-emerald-500 text-xs uppercase tracking-widest font-medium">Simulation complete</span>
       </div>
-      <h1 className="text-3xl font-bold leading-tight tracking-tight">{question}</h1>
+      <h1 className="text-2xl sm:text-3xl font-bold leading-tight tracking-tight break-words">{question}</h1>
       {tldr && (
         <p className="text-zinc-300 text-[15px] leading-relaxed border-l-2 border-zinc-700 pl-4">
           {tldr}
@@ -341,8 +341,8 @@ function TimelineRow({
       <div className="px-4 pb-4 pt-0">
         <div className="ml-10 border-t border-zinc-900 pt-3 space-y-3">
           {Object.entries(turn.decisions).map(([actor, decision]) => (
-            <div key={actor} className="flex items-start gap-4">
-              <span className="text-zinc-500 text-xs shrink-0 w-32 truncate pt-0.5">{actor}</span>
+            <div key={actor} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
+              <span className="text-zinc-500 text-xs shrink-0 sm:w-32 sm:truncate pt-0.5">{actor}</span>
               <span className="text-zinc-300 text-sm leading-relaxed">{decision}</span>
             </div>
           ))}

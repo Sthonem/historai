@@ -18,6 +18,12 @@ export const metadata: Metadata = {
     "Ask any historical what-if question. Multi-agent AI simulates the outcome across turns and produces a narrative report, actor cards, timeline, and territorial map.",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{

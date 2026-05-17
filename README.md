@@ -88,12 +88,16 @@ Frontend (`.env.local`):
 
 ## Example Questions
 
+The home page groups examples by era (Turkish history, 20th century, early modern, ancient). A few starters:
+
+- What if Atatürk had lived until 1960?
 - What if the Ottoman Empire had not entered World War I?
-- What if Julius Caesar had not been assassinated?
 - What if Napoleon had won the Battle of Waterloo?
 - What if the Soviet Union had not collapsed in 1991?
 
 ## Deploy
+
+See [docs/DEPLOY_CLEANUP.md](docs/DEPLOY_CLEANUP.md) for a short checklist (remove stray env vars, delete unused Railway projects, duplicate Vercel frontends).
 
 You can host both pieces on Vercel as two separate projects (frontend = Next.js, backend = Python serverless), or split frontend on Vercel and backend on Railway (or any host). The Vercel-only path is simpler to manage; the Railway path has no function timeout.
 
