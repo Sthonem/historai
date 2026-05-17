@@ -11,7 +11,7 @@ import {
 } from './lib/exampleQuestions'
 
 const DEFAULT_TURNS = 1
-const DEFAULT_CATEGORY: ExampleCategoryId = 'turkish'
+const DEFAULT_CATEGORY: ExampleCategoryId = 'global_conflicts'
 
 export default function Home() {
   const [question, setQuestion] = useState('')

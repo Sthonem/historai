@@ -88,10 +88,10 @@ Frontend (`.env.local`):
 
 ## Example Questions
 
-The home page groups examples by era (Turkish history, 20th century, early modern, ancient). A few starters:
+The home page groups examples by theme (global conflicts, empires & states, leaders & legacies, ancient). A few starters:
 
-- What if Atatürk had lived until 1960?
 - What if the Ottoman Empire had not entered World War I?
+- What if Atatürk had lived until 1960?
 - What if Napoleon had won the Battle of Waterloo?
 - What if the Soviet Union had not collapsed in 1991?
 
